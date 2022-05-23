@@ -986,7 +986,7 @@ class QuicConnection:
 
             # update delay bit
             if not header.is_long_header:
-                delay_bit = True
+                delay_bit = False
 
                 if self._quic_logger is not None:
                     self._quic_logger.log_event(
