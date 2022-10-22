@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from typing import Any, Deque, Dict, FrozenSet, List, Optional, Sequence, Set, Tuple
+import time
 
 from .. import tls
 from ..buffer import (
@@ -37,6 +38,7 @@ from .packet import (
     QuicTransportParameters,
     get_retry_integrity_tag,
     get_spin_bit,
+    get_delay_bit,
     is_draft_version,
     is_long_header,
     pull_ack_frame,
@@ -151,6 +153,9 @@ class Limit:
         self.used = 0
         self.value = value
 
+class DelayBitPhase(Enum):
+    Generation = 0
+    Reflection = 1
 
 class QuicConnectionError(Exception):
     def __init__(self, error_code: int, frame_type: int, reason_phrase: str):
@@ -331,10 +336,18 @@ class QuicConnection:
         self._retry_source_connection_id = retry_source_connection_id
         self._spaces: Dict[tls.Epoch, QuicPacketSpace] = {}
         self._spin_bit = False
-
-        self._delay_bit = False # modded line.
-        
         self._spin_highest_pn = 0
+
+
+        # modded lines:
+        self._delay_flag = False 
+        self._delay_receive_ts = 0.0
+        self._delay_send_ts = 0.0
+        self._delay_bit_phase = DelayBitPhase.Generation if self._is_client else DelayBitPhase.Reflection
+        self._max_process_time = 0.030 # 5 ms
+        self._delay_T_max = 1 # 1 s should address T_max selection section in IETF
+
+        
         self._state = QuicConnectionState.FIRSTFLIGHT
         self._streams: Dict[int, QuicStream] = {}
         self._streams_blocked_bidi: List[QuicStream] = []
@@ -509,7 +522,7 @@ class QuicConnection:
             peer_token=self._peer_token,
             quic_logger=self._quic_logger,
             spin_bit=self._spin_bit,
-            delay_bit=self._delay_bit,
+            delay_bit_calculator_func=self.process_delay_bit_when_send,
             version=self._version,
         )
         if self._close_pending:
@@ -531,6 +544,8 @@ class QuicConnection:
                         frame_type=self._close_event.frame_type,
                         reason_phrase=self._close_event.reason_phrase,
                     )
+                    
+
             self._logger.info(
                 "Connection close sent (code 0x%X, reason %s)",
                 self._close_event.error_code,
@@ -701,6 +716,7 @@ class QuicConnection:
         :param addr: The network address from which the datagram was received.
         :param now: The current time.
         """
+        pkt_ts = time.time()  # not exactly the moment packet arrived, must check on that.
         # stop handling packets when closing
         if self._state in END_STATES:
             return
@@ -922,13 +938,26 @@ class QuicConnection:
                 reserved_mask = 0x0C
             else:
                 reserved_mask = 0x18
-            if plain_header[0] & reserved_mask:
-                self.close(
-                    error_code=QuicErrorCode.PROTOCOL_VIOLATION,
-                    frame_type=QuicFrameType.PADDING,
-                    reason_phrase="Reserved bits must be zero",
-                )
-                return
+
+            # """
+            # This check must be deleted because we modifty reserved bits
+            # """
+            # if plain_header[0] & reserved_mask:
+            #     self.close(
+            #         error_code=QuicErrorCode.PROTOCOL_VIOLATION,
+            #         frame_type=QuicFrameType.PADDING,
+            #         reason_phrase="Reserved bits must be zero",
+            #     )
+            # #     return
+            
+            # if not header.is_long_header and plain_header[0] & reserved_mask:
+            #     self.close(
+            #         error_code=QuicErrorCode.PROTOCOL_VIOLATION,
+            #         frame_type=QuicFrameType.PADDING,
+            #         reason_phrase="delay bit is wrong",
+            #     )
+            #     return
+
 
             # log packet
             quic_logger_frames: Optional[List[Dict]] = None
@@ -983,16 +1012,18 @@ class QuicConnection:
                         event="spin_bit_updated",
                         data={"state": self._spin_bit},
                     )
+                
 
             # update delay bit
             if not header.is_long_header:
-                delay_bit = False
+                curr_delay_bit = get_delay_bit(plain_header[0])
+                self.process_delay_bit_when_recv(curr_delay_bit=curr_delay_bit, packet_timestamp=pkt_ts)
 
                 if self._quic_logger is not None:
                     self._quic_logger.log_event(
                         category="connectivity",
                         event="delay_bit_updated",
-                        data={"state": self._delay_bit},
+                        data={"state": self._delay_flag},
                     )
 
             # handle payload
@@ -3225,3 +3256,47 @@ class QuicConnection:
                     limit=limit,
                 )
             )
+
+    # modded lines:
+    def process_delay_bit_when_recv(self, curr_delay_bit, packet_timestamp):
+        if self._delay_bit_phase is DelayBitPhase.Reflection and curr_delay_bit: # TODO check other conditions
+            # print("received delay on")
+            self._delay_receive_ts = time.time()
+            self._delay_flag = True
+
+        if (self._delay_bit_phase is DelayBitPhase.Reflection and 
+                not self._delay_send_ts == 0.0 and
+                packet_timestamp - self._delay_send_ts > self._delay_T_max and
+                self._is_client):
+                # print("switching back to generation phase")
+                self._delay_bit_phase = DelayBitPhase.Generation 
+        
+        # print("on recv:", packet_timestamp, self._delay_send_ts)
+
+    def process_delay_bit_when_send(self):
+        curr_time = time.time()
+
+        if (self._delay_flag == True and
+            not self._delay_receive_ts == 0.0 and
+            curr_time - self._delay_receive_ts > self._max_process_time): # TODO: check that everything is in seconds
+            # print("got max process time")
+            self._delay_receive_ts = 0.0
+            self._delay_flag = False
+    
+        # print("on send:", self._delay_receive_ts, curr_time)
+
+        if self._delay_bit_phase == DelayBitPhase.Generation and self._is_client: # TODO: is GenerationPhase check enough?
+            self._delay_flag = True
+            self._delay_bit_phase = DelayBitPhase.Reflection
+            # print("sending in generation phase")
+
+        if self._delay_flag:
+            self._delay_flag = False
+            self._delay_send_ts = curr_time
+            # print("next packet will be sent with delay bit")
+            return True
+        else:
+            # print("next packet will be sent without delay bit")
+            return False
+
+    

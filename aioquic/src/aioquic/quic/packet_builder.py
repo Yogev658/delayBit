@@ -68,7 +68,7 @@ class QuicPacketBuilder:
         peer_token: bytes = b"",
         quic_logger: Optional[QuicLoggerTrace] = None,
         spin_bit: bool = False,
-        delay_bit: bool = False,
+        delay_bit_calculator_func = lambda: False, 
     ):
         self.max_flight_bytes: Optional[int] = None
         self.max_total_bytes: Optional[int] = None
@@ -80,7 +80,7 @@ class QuicPacketBuilder:
         self._peer_token = peer_token
         self._quic_logger = quic_logger
         self._spin_bit = spin_bit
-        self._delay_bit = delay_bit
+        self._delay_bit_calculator_func = delay_bit_calculator_func
         self._version = version
 
         # assembled datagrams and packets
@@ -254,6 +254,7 @@ class QuicPacketBuilder:
         self._packet_type = packet_type
         self.quic_logger_frames = self._packet.quic_logger_frames
 
+
         buf.seek(self._packet_start + self._header_size)
 
     def _end_packet(self) -> None:
@@ -315,11 +316,14 @@ class QuicPacketBuilder:
                 buf.push_uint16(length | 0x4000)
                 buf.push_uint16(self._packet_number & 0xFFFF)
             else:
+                delay_bit_value = self._delay_bit_calculator_func()
+                # if delay_bit_value:
+                #     print("delay on!")
                 buf.seek(self._packet_start)
                 buf.push_uint8(
                     self._packet_type
-                    | (self._spin_bit << 5) #TODO: line might be helpful to create delay bit
-                    | (self._delay_bit << 4)
+                    | (delay_bit_value << 4)
+                    | (self._spin_bit << 5) 
                     | (self._packet_crypto.key_phase << 2)
                     | (PACKET_NUMBER_SEND_SIZE - 1)
                 )

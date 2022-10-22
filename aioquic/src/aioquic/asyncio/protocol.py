@@ -60,7 +60,7 @@ class QuicConnectionProtocol(asyncio.DatagramProtocol):
         self._quic.connect(addr, now=self._loop.time())
         self.transmit()
 
-    async def create_stream(
+    async def create_stream( # This is where the connection begins.
         self, is_unidirectional: bool = False
     ) -> Tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         """
@@ -92,7 +92,7 @@ class QuicConnectionProtocol(asyncio.DatagramProtocol):
         self.transmit()
         await asyncio.shield(waiter)
 
-    def transmit(self) -> None:
+    def transmit(self) -> None: # this is where actual sending of data happens.
         """
         Send pending datagrams to the peer and arm the timer if needed.
         """

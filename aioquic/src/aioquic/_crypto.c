@@ -319,10 +319,12 @@ HeaderProtection_apply(HeaderProtectionObject *self, PyObject *args)
     memcpy(self->buffer, header, header_len);
     memcpy(self->buffer + header_len, payload, payload_len);
 
-    if (self->buffer[0] & 0x80) {
+    if (self->buffer[0] & 0x80) { 
         self->buffer[0] ^= self->mask[0] & 0x0F;
     } else {
-        self->buffer[0] ^= self->mask[0] & 0x1F;
+        // modded line
+        // self->buffer[0] ^= self->mask[0] & 0x1F;
+        self->buffer[0] ^= self->mask[0] & 0x07;
     }
 
     for (int i = 0; i < pn_length; ++i) {
@@ -347,10 +349,12 @@ HeaderProtection_remove(HeaderProtectionObject *self, PyObject *args)
 
     memcpy(self->buffer, packet, pn_offset + PACKET_NUMBER_LENGTH_MAX);
 
-    if (self->buffer[0] & 0x80) {
+    if (self->buffer[0] & 0x80) { 
         self->buffer[0] ^= self->mask[0] & 0x0F;
     } else {
-        self->buffer[0] ^= self->mask[0] & 0x1F;
+        // modded line
+        // self->buffer[0] ^= self->mask[0] & 0x1F;
+        self->buffer[0] ^= self->mask[0] & 0x07;
     }
 
     int pn_length = (self->buffer[0] & 0x03) + 1;
