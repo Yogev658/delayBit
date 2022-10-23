@@ -297,6 +297,7 @@ class QuicConnection:
             name="max_data",
             value=configuration.max_data,
         )
+        
         self._local_max_stream_data_bidi_local = configuration.max_stream_data
         self._local_max_stream_data_bidi_remote = configuration.max_stream_data
         self._local_max_stream_data_uni = configuration.max_stream_data
