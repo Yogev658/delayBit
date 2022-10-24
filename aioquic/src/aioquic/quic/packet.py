@@ -14,6 +14,7 @@ PACKET_LONG_HEADER = 0x80
 PACKET_FIXED_BIT = 0x40
 PACKET_SPIN_BIT = 0x20
 PACKET_DELAY_BIT = 0X10
+PACKET_Q_BIT = 0x08
 PACKET_SHORT_RESERVED_BITS = 0x18
 PACKET_LONG_RESERVED_BITS = 0x0C
 
@@ -126,6 +127,9 @@ def get_spin_bit(first_byte: int) -> bool:
 # modded: added function
 def get_delay_bit(first_byte: int) -> bool:
     return bool(first_byte & PACKET_DELAY_BIT)
+    # modded: added function
+def get_q_bit(first_byte: int) -> bool:
+    return bool(first_byte & PACKET_Q_BIT)
 
 
 def is_draft_version(version: int) -> bool:

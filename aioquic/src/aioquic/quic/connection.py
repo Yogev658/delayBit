@@ -39,6 +39,7 @@ from .packet import (
     get_retry_integrity_tag,
     get_spin_bit,
     get_delay_bit,
+    get_q_bit,
     is_draft_version,
     is_long_header,
     pull_ack_frame,
@@ -103,6 +104,8 @@ RETIRE_CONNECTION_ID_CAPACITY = 1 + UINT_VAR_MAX_SIZE
 STOP_SENDING_FRAME_CAPACITY = 1 + 2 * UINT_VAR_MAX_SIZE
 STREAMS_BLOCKED_CAPACITY = 1 + UINT_VAR_MAX_SIZE
 TRANSPORT_CLOSE_FRAME_CAPACITY = 1 + 3 * UINT_VAR_MAX_SIZE  # + reason length
+
+
 
 
 def EPOCHS(shortcut: str) -> FrozenSet[tls.Epoch]:
@@ -297,7 +300,7 @@ class QuicConnection:
             name="max_data",
             value=configuration.max_data,
         )
-        
+
         self._local_max_stream_data_bidi_local = configuration.max_stream_data
         self._local_max_stream_data_bidi_remote = configuration.max_stream_data
         self._local_max_stream_data_uni = configuration.max_stream_data
@@ -337,6 +340,9 @@ class QuicConnection:
         self._retry_source_connection_id = retry_source_connection_id
         self._spaces: Dict[tls.Epoch, QuicPacketSpace] = {}
         self._spin_bit = False
+        self._q_bit = False
+        self._Q_BIT_N = 16
+        self._q_counter = 0
         self._spin_highest_pn = 0
 
 
@@ -524,6 +530,7 @@ class QuicConnection:
             quic_logger=self._quic_logger,
             spin_bit=self._spin_bit,
             delay_bit_calculator_func=self.process_delay_bit_when_send,
+            q_bit=self._q_bit,
             version=self._version,
         )
         if self._close_pending:
@@ -1025,6 +1032,24 @@ class QuicConnection:
                         category="connectivity",
                         event="delay_bit_updated",
                         data={"state": self._delay_flag},
+                    )
+
+            # update q bit
+        
+            if not header.is_long_header:
+                curr_q_bit = get_q_bit(plain_header[0])
+                if self._q_counter >= self._Q_BIT_N:
+                    self._q_bit = not curr_q_bit
+                    self._q_counter = -1
+                self._q_counter += 1
+                print(self._q_counter, self._q_bit)
+                
+
+                if self._quic_logger is not None:
+                    self._quic_logger.log_event(
+                        category="connectivity",
+                        event="q_bit_updated",
+                        data={"state": self._q_bit},
                     )
 
             # handle payload

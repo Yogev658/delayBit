@@ -68,7 +68,8 @@ class QuicPacketBuilder:
         peer_token: bytes = b"",
         quic_logger: Optional[QuicLoggerTrace] = None,
         spin_bit: bool = False,
-        delay_bit_calculator_func = lambda: False, 
+        delay_bit_calculator_func = lambda: False,
+        q_bit: bool = False 
     ):
         self.max_flight_bytes: Optional[int] = None
         self.max_total_bytes: Optional[int] = None
@@ -81,6 +82,7 @@ class QuicPacketBuilder:
         self._quic_logger = quic_logger
         self._spin_bit = spin_bit
         self._delay_bit_calculator_func = delay_bit_calculator_func
+        self._q_bit = q_bit
         self._version = version
 
         # assembled datagrams and packets
@@ -322,6 +324,7 @@ class QuicPacketBuilder:
                 buf.seek(self._packet_start)
                 buf.push_uint8(
                     self._packet_type
+                    | (self._q_bit << 3)
                     | (delay_bit_value << 4)
                     | (self._spin_bit << 5) 
                     | (self._packet_crypto.key_phase << 2)
