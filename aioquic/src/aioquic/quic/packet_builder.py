@@ -69,7 +69,7 @@ class QuicPacketBuilder:
         quic_logger: Optional[QuicLoggerTrace] = None,
         spin_bit: bool = False,
         delay_bit_calculator_func = lambda: False,
-        q_bit: bool = False 
+        q_bit_calculator_func = lambda: False 
     ):
         self.max_flight_bytes: Optional[int] = None
         self.max_total_bytes: Optional[int] = None
@@ -82,7 +82,7 @@ class QuicPacketBuilder:
         self._quic_logger = quic_logger
         self._spin_bit = spin_bit
         self._delay_bit_calculator_func = delay_bit_calculator_func
-        self._q_bit = q_bit
+        self._q_bit_calculator_func = q_bit_calculator_func
         self._version = version
 
         # assembled datagrams and packets
@@ -318,13 +318,14 @@ class QuicPacketBuilder:
                 buf.push_uint16(length | 0x4000)
                 buf.push_uint16(self._packet_number & 0xFFFF)
             else:
+                q_bit_value = self._q_bit_calculator_func()
                 delay_bit_value = self._delay_bit_calculator_func()
                 # if delay_bit_value:
                 #     print("delay on!")
                 buf.seek(self._packet_start)
                 buf.push_uint8(
                     self._packet_type
-                    | (self._q_bit << 3)
+                    | (q_bit_value << 3)
                     | (delay_bit_value << 4)
                     | (self._spin_bit << 5) 
                     | (self._packet_crypto.key_phase << 2)

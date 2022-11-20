@@ -530,7 +530,7 @@ class QuicConnection:
             quic_logger=self._quic_logger,
             spin_bit=self._spin_bit,
             delay_bit_calculator_func=self.process_delay_bit_when_send,
-            q_bit=self._q_bit,
+            q_bit_calculator_func=self.process_q_bit,
             version=self._version,
         )
         if self._close_pending:
@@ -1034,23 +1034,12 @@ class QuicConnection:
                         data={"state": self._delay_flag},
                     )
 
-            # update q bit
-        
-            if not header.is_long_header:
-                curr_q_bit = get_q_bit(plain_header[0])
-                if self._q_counter >= self._Q_BIT_N:
-                    self._q_bit = not curr_q_bit
-                    self._q_counter = -1
-                self._q_counter += 1
-                print(self._q_counter, self._q_bit)
-                
-
-                if self._quic_logger is not None:
-                    self._quic_logger.log_event(
-                        category="connectivity",
-                        event="q_bit_updated",
-                        data={"state": self._q_bit},
-                    )
+                # if self._quic_logger is not None:
+                #     self._quic_logger.log_event(
+                #         category="connectivity",
+                #         event="q_bit_updated",
+                #         data={"state": self._q_bit},
+                #     )
 
             # handle payload
             context = QuicReceiveContext(
@@ -3325,4 +3314,14 @@ class QuicConnection:
             # print("next packet will be sent without delay bit")
             return False
 
+    # update q bit
+    def process_q_bit(self) -> bool:
+        self._q_counter += 1
+        if self._q_counter >= self._Q_BIT_N:
+            self._q_bit = not self._q_bit
+            self._q_counter = 0
+        if self._q_counter < 10:
+            print("0", end="")
+        print(self._q_counter, self._q_bit)
+        return self._q_bit
     
