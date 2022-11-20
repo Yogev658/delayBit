@@ -341,7 +341,7 @@ class QuicConnection:
         self._spaces: Dict[tls.Epoch, QuicPacketSpace] = {}
         self._spin_bit = False
         self._q_bit = False
-        self._Q_BIT_N = 16
+        self._Q_BIT_N = 64
         self._q_counter = 0
         self._spin_highest_pn = 0
 
