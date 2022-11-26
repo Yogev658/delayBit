@@ -322,7 +322,9 @@ HeaderProtection_apply(HeaderProtectionObject *self, PyObject *args)
     if (self->buffer[0] & 0x80) { 
         self->buffer[0] ^= self->mask[0] & 0x0F;
     } else {
-        // modded line
+        // modded lines:
+        // changed mask to exclude the reserved bits from encryption
+        // original line is commented
         // self->buffer[0] ^= self->mask[0] & 0x1F;
         self->buffer[0] ^= self->mask[0] & 0x07;
     }

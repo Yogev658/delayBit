@@ -38,8 +38,11 @@ from .packet import (
     QuicTransportParameters,
     get_retry_integrity_tag,
     get_spin_bit,
+
+    # modded lines:
     get_delay_bit,
     get_q_bit,
+
     is_draft_version,
     is_long_header,
     pull_ack_frame,
@@ -156,6 +159,7 @@ class Limit:
         self.used = 0
         self.value = value
 
+# modded lines:
 class DelayBitPhase(Enum):
     Generation = 0
     Reflection = 1
@@ -340,21 +344,20 @@ class QuicConnection:
         self._retry_source_connection_id = retry_source_connection_id
         self._spaces: Dict[tls.Epoch, QuicPacketSpace] = {}
         self._spin_bit = False
-        self._q_bit = False
-        self._Q_BIT_N = 64
-        self._q_counter = 0
         self._spin_highest_pn = 0
 
-
         # modded lines:
-        self._delay_flag = False 
+        self._delay_flag = False
         self._delay_receive_ts = 0.0
         self._delay_send_ts = 0.0
         self._delay_bit_phase = DelayBitPhase.Generation if self._is_client else DelayBitPhase.Reflection
-        self._max_process_time = 0.030 # 5 ms
+        self._max_process_time = 0.030 # 30 ms
         self._delay_T_max = 1 # 1 s should address T_max selection section in IETF
 
-        
+        self._q_bit = False
+        self._Q_BIT_N = 64
+        self._q_counter = 0
+
         self._state = QuicConnectionState.FIRSTFLIGHT
         self._streams: Dict[int, QuicStream] = {}
         self._streams_blocked_bidi: List[QuicStream] = []
@@ -529,8 +532,11 @@ class QuicConnection:
             peer_token=self._peer_token,
             quic_logger=self._quic_logger,
             spin_bit=self._spin_bit,
+
+            # modded lines:
             delay_bit_calculator_func=self.process_delay_bit_when_send,
             q_bit_calculator_func=self.process_q_bit,
+
             version=self._version,
         )
         if self._close_pending:
@@ -947,9 +953,9 @@ class QuicConnection:
             else:
                 reserved_mask = 0x18
 
-            # """
+            # modded lines:
             # This check must be deleted because we modifty reserved bits
-            # """
+            #
             # if plain_header[0] & reserved_mask:
             #     self.close(
             #         error_code=QuicErrorCode.PROTOCOL_VIOLATION,
@@ -957,15 +963,6 @@ class QuicConnection:
             #         reason_phrase="Reserved bits must be zero",
             #     )
             # #     return
-            
-            # if not header.is_long_header and plain_header[0] & reserved_mask:
-            #     self.close(
-            #         error_code=QuicErrorCode.PROTOCOL_VIOLATION,
-            #         frame_type=QuicFrameType.PADDING,
-            #         reason_phrase="delay bit is wrong",
-            #     )
-            #     return
-
 
             # log packet
             quic_logger_frames: Optional[List[Dict]] = None
@@ -1021,7 +1018,7 @@ class QuicConnection:
                         data={"state": self._spin_bit},
                     )
                 
-
+            # modded lines:
             # update delay bit
             if not header.is_long_header:
                 curr_delay_bit = get_delay_bit(plain_header[0])
@@ -1033,13 +1030,6 @@ class QuicConnection:
                         event="delay_bit_updated",
                         data={"state": self._delay_flag},
                     )
-
-                # if self._quic_logger is not None:
-                #     self._quic_logger.log_event(
-                #         category="connectivity",
-                #         event="q_bit_updated",
-                #         data={"state": self._q_bit},
-                #     )
 
             # handle payload
             context = QuicReceiveContext(
@@ -3273,6 +3263,7 @@ class QuicConnection:
             )
 
     # modded lines:
+    # prints were used to verify delay bit and q bit correctness but were commented out after verification
     def process_delay_bit_when_recv(self, curr_delay_bit, packet_timestamp):
         if self._delay_bit_phase is DelayBitPhase.Reflection and curr_delay_bit: # TODO check other conditions
             # print("received delay on")
@@ -3314,12 +3305,13 @@ class QuicConnection:
             # print("next packet will be sent without delay bit")
             return False
 
-    # update q bit
+    # return next q bit value
     def process_q_bit(self) -> bool:
         self._q_counter += 1
         if self._q_counter >= self._Q_BIT_N:
             self._q_bit = not self._q_bit
             self._q_counter = 0
+        # Prints to verify q bit correctness
         # if self._q_counter < 10:
         #     print("0", end="")
         # print(self._q_counter, self._q_bit)

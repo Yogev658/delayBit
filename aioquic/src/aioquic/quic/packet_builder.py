@@ -68,6 +68,8 @@ class QuicPacketBuilder:
         peer_token: bytes = b"",
         quic_logger: Optional[QuicLoggerTrace] = None,
         spin_bit: bool = False,
+
+        # modded lines:
         delay_bit_calculator_func = lambda: False,
         q_bit_calculator_func = lambda: False 
     ):
@@ -81,8 +83,11 @@ class QuicPacketBuilder:
         self._peer_token = peer_token
         self._quic_logger = quic_logger
         self._spin_bit = spin_bit
+
+        # modded lines:
         self._delay_bit_calculator_func = delay_bit_calculator_func
         self._q_bit_calculator_func = q_bit_calculator_func
+
         self._version = version
 
         # assembled datagrams and packets
@@ -318,15 +323,18 @@ class QuicPacketBuilder:
                 buf.push_uint16(length | 0x4000)
                 buf.push_uint16(self._packet_number & 0xFFFF)
             else:
+                # modded lines:
                 q_bit_value = self._q_bit_calculator_func()
                 delay_bit_value = self._delay_bit_calculator_func()
-                # if delay_bit_value:
-                #     print("delay on!")
+
                 buf.seek(self._packet_start)
                 buf.push_uint8(
                     self._packet_type
+
+                    # modded lines:
                     | (q_bit_value << 3)
                     | (delay_bit_value << 4)
+
                     | (self._spin_bit << 5) 
                     | (self._packet_crypto.key_phase << 2)
                     | (PACKET_NUMBER_SEND_SIZE - 1)
