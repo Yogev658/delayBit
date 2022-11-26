@@ -3320,8 +3320,8 @@ class QuicConnection:
         if self._q_counter >= self._Q_BIT_N:
             self._q_bit = not self._q_bit
             self._q_counter = 0
-        if self._q_counter < 10:
-            print("0", end="")
-        print(self._q_counter, self._q_bit)
+        # if self._q_counter < 10:
+        #     print("0", end="")
+        # print(self._q_counter, self._q_bit)
         return self._q_bit
     
