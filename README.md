@@ -4,4 +4,4 @@ This repository contains a modification to the aioquic implementation of QUIC an
 All changes were listed under a comment "modded lines" for convenience.
 
 Information about the algorithms added to aioquic can be found here:
-https://datatracker.ietf.org/doc/html/draft-ietf-ippm-explicit-flow-measurements-01#section-2.2.5
+https://datatracker.ietf.org/doc/html/draft-ietf-ippm-explicit-flow-measurements-01
